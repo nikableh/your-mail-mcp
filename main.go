@@ -150,6 +150,11 @@ func loadConfig(path string) (*Config, error) {
 			return nil, fmt.Errorf("account %q: password is empty and no pass_cmd is set; is the referenced environment variable set?", a.Name)
 		case hasControl(a.PassCmd):
 			return nil, fmt.Errorf("account %q: pass_cmd must not contain control characters", a.Name)
+		case strings.HasPrefix(a.PassCmd, "+"):
+			// mbsync reads a leading + as "this command talks to the TTY" and
+			// strips it; the daemon has no terminal, and discovery would run
+			// the + as part of the command.
+			return nil, fmt.Errorf("account %q: pass_cmd must not start with +; the daemon has no terminal to prompt on", a.Name)
 		}
 		// The names go on one AuthMechs line separated by spaces, so a
 		// space inside one would silently become two mechanisms, a quote

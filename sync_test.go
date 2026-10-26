@@ -140,6 +140,23 @@ func TestAccountPasswordRunsPassCmdLikeMbsync(t *testing.T) {
 	}
 }
 
+// A pass_cmd that never returns, such as a keychain waiting on a dialog nobody
+// sees, must give up when the context does. The shell runs a compound command
+// in a child that keeps stdout open after the shell is killed, so this also
+// fails if Output is left waiting on that pipe.
+func TestAccountPasswordGivesUpWithContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := (Account{Name: "a", PassCmd: "sleep 5; echo late"}).password(ctx)
+	if err == nil {
+		t.Error("a pass_cmd cut off by its deadline must be an error")
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("password returned after %s, want it to give up shortly after the deadline", d)
+	}
+}
+
 func TestGenMbsyncrcQuotesPatterns(t *testing.T) {
 	cfg := &Config{Accounts: []Account{
 		{Name: "work", Host: "h", Port: 993, User: "u", Password: "p", TLS: "imaps", Patterns: []string{"Sent Items", "INBOX"}},

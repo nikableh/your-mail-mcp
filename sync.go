@@ -726,7 +726,11 @@ func discoverSpecialUse(ctx context.Context, a Account) (special, all []string, 
 	// Resolve the secret before dialing: a pass_cmd that fails has nothing
 	// to say to the server, and the error is clearer without a connection
 	// wrapped around it.
-	pw, err := a.password(ctx)
+	// Bounded like the rest of discovery: a keychain waiting on a dialog
+	// nobody sees would otherwise hold up every account after this one.
+	cmdCtx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+	pw, err := a.password(cmdCtx)
+	cancel()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -800,6 +804,9 @@ func (a Account) password(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", a.PassCmd)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
+	// The shell runs a compound command in a child, which keeps stdout open
+	// after the context kills the shell; without this Output waits for it.
+	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("account %q: pass_cmd: %w: %s", a.Name, err, strings.TrimSpace(stderr.String()))

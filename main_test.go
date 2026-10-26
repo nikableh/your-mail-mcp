@@ -173,6 +173,10 @@ func TestLoadConfigRejectsBadInput(t *testing.T) {
 			`{"accounts":[{"name":"a","host":"h","user":"u","password":"p","pass_cmd":"cat /run/secrets/a"}]}`,
 			"pass_cmd",
 		},
+		"pass_cmd with a TTY prefix": {
+			`{"accounts":[{"name":"a","host":"h","user":"u","pass_cmd":"+cat /run/secrets/a"}]}`,
+			"pass_cmd",
+		},
 		"newline in pass_cmd": {
 			`{"accounts":[{"name":"a","host":"h","user":"u","pass_cmd":"cat /run/secrets/a\nPass x"}]}`,
 			"pass_cmd",
