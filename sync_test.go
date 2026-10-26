@@ -103,6 +103,60 @@ func TestGenMbsyncrcEscapesPasswords(t *testing.T) {
 	}
 }
 
+func TestGenMbsyncrcWritesPassCmdInsteadOfPass(t *testing.T) {
+	cfg := &Config{Accounts: []Account{
+		{Name: "work", Host: "h", Port: 993, User: "u", PassCmd: `security find-generic-password -s "your-mail" -a work -w`, TLS: "imaps", Patterns: []string{"*"}},
+	}}
+	out := genMbsyncrc(cfg, "/mail")
+	if !strings.Contains(out, "\nPassCmd \"security find-generic-password -s \\\"your-mail\\\" -a work -w\"\n") {
+		t.Errorf("PassCmd line missing or misquoted in:\n%s", out)
+	}
+	if strings.Contains(out, "\nPass ") {
+		t.Error("a pass_cmd account must not also get a Pass line; mbsync would send the empty one")
+	}
+}
+
+// discoverSpecialUse is the one place this process needs the password itself.
+// With pass_cmd it must obtain it exactly as mbsync will: run the command
+// through the shell, take stdout, drop one trailing newline, ignore stderr.
+func TestAccountPasswordRunsPassCmdLikeMbsync(t *testing.T) {
+	ctx := context.Background()
+	if pw, err := (Account{Name: "a", Password: "p"}).password(ctx); err != nil || pw != "p" {
+		t.Fatalf("literal password = %q, %v; want it returned untouched", pw, err)
+	}
+	pw, err := (Account{Name: "a", PassCmd: `echo warning >&2; printf 's3cret\n'`}).password(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pw != "s3cret" {
+		t.Errorf("password = %q, want %q: one trailing newline stripped, stderr kept out", pw, "s3cret")
+	}
+	_, err = (Account{Name: "a", PassCmd: `echo no such item >&2; exit 44`}).password(ctx)
+	if err == nil || !strings.Contains(err.Error(), "no such item") {
+		t.Errorf("err = %v, want the command's stderr in the error", err)
+	}
+	if _, err := (Account{Name: "a", PassCmd: "true"}).password(ctx); err == nil {
+		t.Error("a command that prints nothing must be an error, not an empty password")
+	}
+}
+
+// A pass_cmd that never returns, such as a keychain waiting on a dialog nobody
+// sees, must give up when the context does. The shell runs a compound command
+// in a child that keeps stdout open after the shell is killed, so this also
+// fails if Output is left waiting on that pipe.
+func TestAccountPasswordGivesUpWithContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := (Account{Name: "a", PassCmd: "sleep 5; echo late"}).password(ctx)
+	if err == nil {
+		t.Error("a pass_cmd cut off by its deadline must be an error")
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("password returned after %s, want it to give up shortly after the deadline", d)
+	}
+}
+
 func TestGenMbsyncrcQuotesPatterns(t *testing.T) {
 	cfg := &Config{Accounts: []Account{
 		{Name: "work", Host: "h", Port: 993, User: "u", Password: "p", TLS: "imaps", Patterns: []string{"Sent Items", "INBOX"}},
