@@ -982,11 +982,13 @@ func (s *Server) inProgress() string {
 }
 
 func (s *Server) registerTools(m *mcp.Server) {
-	closedWorld, harmless, destructive, openWorld := false, false, true, true
+	// No tool is destructive: refresh only pulls mail into the mirror, and
+	// local attachment export evicts only its own earlier exports.
+	closedWorld, harmless, openWorld := false, false, true
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: &harmless, OpenWorldHint: &closedWorld}
-	writesLocal := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &destructive, OpenWorldHint: &closedWorld}
+	writesLocal := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &harmless, OpenWorldHint: &closedWorld}
 	// Unlike the index queries, refresh also contacts the IMAP provider.
-	refreshHints := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &destructive, OpenWorldHint: &openWorld}
+	refreshHints := &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: &harmless, OpenWorldHint: &openWorld}
 	attachmentHints := readOnly
 	if s.publicURL == "" {
 		// Local attachment export can write and evict files in the index.

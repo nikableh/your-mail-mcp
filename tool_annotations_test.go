@@ -50,8 +50,10 @@ func TestToolAnnotationsDescribeSideEffects(t *testing.T) {
 				if a.ReadOnlyHint == writes {
 					t.Errorf("tool %s readOnlyHint = %v, want %v", tool.Name, a.ReadOnlyHint, !writes)
 				}
-				if a.DestructiveHint == nil || *a.DestructiveHint != writes {
-					t.Errorf("tool %s must explicitly advertise destructiveHint = %v", tool.Name, writes)
+				// Nothing here destroys mail: refresh only pulls, and local
+				// attachment export evicts only its own earlier exports.
+				if a.DestructiveHint == nil || *a.DestructiveHint {
+					t.Errorf("tool %s must explicitly advertise destructiveHint = false", tool.Name)
 				}
 				openWorld := tool.Name == "refresh" // Sync contacts the IMAP provider.
 				if a.OpenWorldHint == nil || *a.OpenWorldHint != openWorld {
